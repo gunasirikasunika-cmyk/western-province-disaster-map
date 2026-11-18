@@ -1,0 +1,136 @@
+{
+ "districts": {
+  "Colombo": {
+   "flood_cells": 125,
+   "flood_count": 6850,
+   "flood_km2": 6.08,
+   "landslide_points": 0,
+   "hospitals_major": 26,
+   "hospitals_major_in_flood": 0,
+   "police": 47,
+   "police_in_flood": 0
+  },
+  "Gampaha": {
+   "flood_cells": 226,
+   "flood_count": 13878,
+   "flood_km2": 12.31,
+   "landslide_points": 2,
+   "hospitals_major": 22,
+   "hospitals_major_in_flood": 0,
+   "police": 28,
+   "police_in_flood": 0
+  },
+  "Kalutara": {
+   "flood_cells": 149,
+   "flood_count": 4200,
+   "flood_km2": 3.73,
+   "landslide_points": 0,
+   "hospitals_major": 19,
+   "hospitals_major_in_flood": 0,
+   "police": 24,
+   "police_in_flood": 1
+  }
+ },
+ "hotspots": [
+  {
+   "rank": 1,
+   "lat": 7.1041,
+   "lng": 79.9239,
+   "count": 2567,
+   "cells": 6,
+   "district": "Gampaha",
+   "near": "Police Station - Ja-Ela"
+  },
+  {
+   "rank": 2,
+   "lat": 7.08921,
+   "lng": 79.95314,
+   "count": 1262,
+   "cells": 11,
+   "district": "Gampaha",
+   "near": "PO & Police Post"
+  },
+  {
+   "rank": 3,
+   "lat": 6.88212,
+   "lng": 80.00846,
+   "count": 972,
+   "cells": 4,
+   "district": "Colombo",
+   "near": "Police Station Athurugiriya"
+  },
+  {
+   "rank": 4,
+   "lat": 7.08685,
+   "lng": 79.9718,
+   "count": 927,
+   "cells": 8,
+   "district": "Gampaha",
+   "near": "Police Station - Gampaha"
+  },
+  {
+   "rank": 5,
+   "lat": 6.91396,
+   "lng": 79.98744,
+   "count": 821,
+   "cells": 8,
+   "district": "Colombo",
+   "near": "Police Station Nawagamuwa"
+  },
+  {
+   "rank": 6,
+   "lat": 6.88757,
+   "lng": 80.02224,
+   "count": 802,
+   "cells": 4,
+   "district": "Colombo",
+   "near": "Police Station Athurugiriya"
+  },
+  {
+   "rank": 7,
+   "lat": 6.97047,
+   "lng": 79.99578,
+   "count": 734,
+   "cells": 5,
+   "district": "Gampaha",
+   "near": "Police Station Meegahawaththa"
+  },
+  {
+   "rank": 8,
+   "lat": 7.10452,
+   "lng": 79.94851,
+   "count": 622,
+   "cells": 5,
+   "district": "Gampaha",
+   "near": "Police Station - Raddolugama"
+  }
+ ],
+ "landslide_access": [
+  {
+   "n": 1,
+   "lat": 7.00241,
+   "lng": 80.15536,
+   "district": "Gampaha",
+   "hospital": "Divisional Hospital B - Radawana",
+   "hospital_km": 6.9,
+   "police": "Pugoda Police station",
+   "police_km": 5.4
+  },
+  {
+   "n": 6,
+   "lat": 7.13099,
+   "lng": 80.21115,
+   "district": "Gampaha",
+   "hospital": "Base Hospital-Wathupitiwala",
+   "hospital_km": 11.3,
+   "police": "Police Station , Nittambuwa",
+   "police_km": 12.4
+  }
+ ],
+ "notes": {
+  "flood_total_cells": 500,
+  "flood_total_count": 24928,
+  "flood_total_km2": 22.11,
+  "flood_buffer_m": 250
+ }
+}

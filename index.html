@@ -1,0 +1,1049 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Western Province Disaster Watch</title>
+<meta name="description" content="Public web map for reporting and monitoring floods, landslides and storm damage in Colombo, Gampaha and Kalutara districts, Sri Lanka.">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.css">
+<style>
+:root{
+  --ink:#14213d; --muted:#586174; --line:#e1e6ee; --bg:#f4f6fa; --panel:#ffffff;
+  --navy:#10243e; --brand:#0f5fa8; --cta:#d9480f;
+  --flood:#1f6fd1; --slide:#b4571f; --storm:#7a4bc2;
+  --ok:#1b7f5c; --warn:#c77700; --bad:#c0392b;
+  --radius:10px; --shadow:0 1px 3px rgba(16,36,62,.12),0 4px 14px rgba(16,36,62,.08);
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;color:var(--ink);background:var(--bg);display:flex;flex-direction:column;overflow:hidden}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:3px solid #7fb4ee;outline-offset:2px}
+
+/* header */
+header{background:var(--navy);color:#fff;display:flex;align-items:center;gap:12px;padding:8px 16px;min-height:56px;flex:0 0 auto}
+header .brand{display:flex;flex-direction:column;min-width:0}
+header h1{font-size:17px;line-height:1.2;margin:0;font-weight:650;letter-spacing:.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+header .sub{font-size:12px;color:#b9c6da;display:flex;gap:10px;flex-wrap:wrap}
+header .sub i{font-style:normal;display:inline-flex;align-items:center;gap:5px}
+header .sub i:before{content:"";width:9px;height:9px;border-radius:50%;background:var(--c)}
+header .sp{flex:1}
+.btn{border:0;border-radius:8px;padding:9px 14px;font-weight:600;cursor:pointer;background:#fff;color:var(--navy)}
+.btn:hover{filter:brightness(.96)}
+.btn.cta{background:var(--cta);color:#fff}
+.btn.ghost{background:transparent;color:#dbe5f3;border:1px solid #3a5073}
+.btn.small{padding:6px 10px;font-size:13px}
+.btn.line{background:#fff;border:1px solid var(--line);color:var(--ink)}
+.btn[disabled]{opacity:.55;cursor:not-allowed}
+
+/* layout */
+main{flex:1;min-height:0;display:flex;position:relative}
+#panel{width:410px;max-width:46vw;background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;z-index:500;box-shadow:var(--shadow)}
+#tabs{display:flex;border-bottom:1px solid var(--line);flex:0 0 auto}
+#tabs button{flex:1;border:0;background:none;padding:11px 4px 9px;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:12.5px}
+#tabs button svg{width:20px;height:20px}
+#tabs button[aria-selected=true]{color:var(--brand);border-bottom-color:var(--brand)}
+#tabs .fold{flex:0 0 40px;display:none}
+.tabpane{flex:1;overflow:auto;padding:14px 16px 24px;display:none}
+.tabpane.on{display:block}
+#map{flex:1;min-width:0;background:#dfe7ef}
+.leaflet-container{font:inherit}
+body.picking #map{cursor:crosshair}
+
+h2{font-size:15px;margin:0 0 6px}
+h3{font-size:12px;margin:18px 0 8px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted)}
+p{margin:0 0 8px}
+.hint{color:var(--muted);font-size:12.5px}
+.card{border:1px solid var(--line);border-radius:var(--radius);padding:10px 12px;background:#fff}
+.notice{background:#fff7e6;border:1px solid #f2d79a;border-radius:var(--radius);padding:9px 11px;font-size:12.5px;color:#5c4308}
+.notice.info{background:#eef5fd;border-color:#bcd6f3;color:#17426e}
+.notice.bad{background:#fdeeee;border-color:#f1b9b3;color:#7a1f16}
+.notice.ok{background:#eaf7f1;border-color:#a9dcc7;color:#10553d}
+
+/* layers */
+.lyr{display:flex;align-items:center;gap:9px;padding:6px 2px;cursor:pointer;border-radius:6px}
+.lyr:hover{background:#f3f6fa}
+.lyr input{width:16px;height:16px;margin:0;accent-color:var(--brand)}
+.lyr .sw{width:18px;height:18px;flex:0 0 18px;display:inline-block}
+.lyr .nm{flex:1}
+.lyr .ct{color:var(--muted);font-size:12px}
+.lyr small{display:block;color:var(--muted);font-size:11.5px;line-height:1.3}
+.seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{flex:1;border:0;background:#fff;padding:7px 4px;cursor:pointer;font-size:12.5px;border-right:1px solid var(--line)}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed=true]{background:var(--brand);color:#fff}
+
+/* form */
+.step{display:flex;gap:10px;margin-top:16px}
+.step .n{flex:0 0 24px;height:24px;border-radius:50%;background:var(--navy);color:#fff;font-weight:700;font-size:12.5px;display:flex;align-items:center;justify-content:center;margin-top:1px}
+.step .body{flex:1;min-width:0}
+.step label.t{display:block;font-weight:650;margin-bottom:5px}
+.opt{display:grid;gap:7px}
+.opt.three{grid-template-columns:repeat(3,1fr)}
+.opt.four{grid-template-columns:repeat(2,1fr)}
+.opt>div{position:relative}
+.opt input{position:absolute;opacity:0;pointer-events:none}
+.opt label{border:1.5px solid var(--line);border-radius:9px;padding:9px 6px;text-align:center;cursor:pointer;background:#fff;font-weight:550;font-size:13px;display:flex;flex-direction:column;align-items:center;gap:4px;line-height:1.2}
+.opt label svg{width:24px;height:24px}
+.opt input:checked+label{border-color:var(--c,var(--brand));background:color-mix(in srgb,var(--c,var(--brand)) 9%,#fff);box-shadow:0 0 0 1px var(--c,var(--brand)) inset}
+.opt input:focus-visible+label{outline:3px solid #7fb4ee}
+.opt.sev label{padding:8px 4px}
+select,input[type=date],textarea{width:100%;padding:9px 10px;border:1.5px solid var(--line);border-radius:8px;background:#fff}
+textarea{min-height:84px;resize:vertical}
+.loc{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.locbox{flex:1 1 100%;border:1.5px dashed #b6c3d6;border-radius:9px;padding:9px 11px;background:#f9fbfd;font-size:13px}
+.locbox.set{border-style:solid;border-color:var(--ok);background:#f1faf6}
+.locbox.bad{border-color:var(--bad);background:#fdf3f2}
+#photoPrev{display:none;margin-top:8px;max-width:100%;max-height:170px;border-radius:8px;border:1px solid var(--line)}
+.row{display:flex;gap:8px;align-items:center}
+.cnt{font-size:11.5px;color:var(--muted);text-align:right}
+.check{display:flex;gap:9px;align-items:flex-start;font-size:12.5px;margin-top:14px}
+.check input{margin-top:3px;width:16px;height:16px;accent-color:var(--brand)}
+.hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
+#submitBtn{width:100%;margin-top:14px;padding:12px;font-size:15px}
+.err{color:var(--bad);font-size:12.5px;margin-top:5px}
+
+/* insights */
+.tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.tile{border:1px solid var(--line);border-radius:var(--radius);padding:9px 10px;background:#fff;border-top:4px solid var(--c)}
+.tile b{display:block;font-size:22px;line-height:1.1}
+.tile span{font-size:12px;color:var(--muted)}
+table.t{width:100%;border-collapse:collapse;font-size:12.5px}
+table.t th{font-weight:600;color:var(--muted);text-align:right;padding:5px 4px;border-bottom:1px solid var(--line);font-size:11.5px;vertical-align:bottom}
+table.t th:first-child,table.t td:first-child{text-align:left}
+table.t td{padding:6px 4px;border-bottom:1px solid #eef1f6;text-align:right;font-variant-numeric:tabular-nums}
+table.t tr.click{cursor:pointer}
+table.t tr.click:hover td{background:#f3f7fc}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;background:var(--c)}
+.bar{height:9px;border-radius:5px;background:#e9eef5;overflow:hidden;display:flex}
+.bar i{display:block;height:100%}
+.src{font-size:11.5px;color:var(--muted);margin-top:6px}
+
+/* live */
+.big{display:flex;gap:12px;align-items:flex-end}
+.big .tmp{font-size:38px;font-weight:650;line-height:1}
+.kv{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
+.kv div{background:#f4f7fb;border-radius:8px;padding:7px 9px}
+.kv b{display:block;font-size:16px}
+.kv span{font-size:11.5px;color:var(--muted)}
+.river{display:flex;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid #eef1f6;cursor:pointer}
+.river:hover{background:#f6f9fc}
+.river .nm{flex:1;min-width:0}
+.river .nm b{display:block;font-size:13px}
+.chip{display:inline-block;border-radius:20px;padding:2px 9px;font-size:11.5px;font-weight:650;color:#fff;background:var(--c)}
+.spark{width:96px;height:34px;flex:0 0 96px}
+.links a{display:inline-block;margin:0 10px 6px 0;color:var(--brand);font-weight:600}
+
+/* map bits */
+.legend{background:rgba(255,255,255,.96);padding:9px 11px;border-radius:var(--radius);box-shadow:var(--shadow);font-size:12px;line-height:1.7;max-width:230px}
+.legend b{display:block;margin-bottom:2px;font-size:12px}
+.legend .r{display:flex;align-items:center;gap:7px}
+.legend svg{width:16px;height:16px;flex:0 0 16px}
+.legend .tog{cursor:pointer;float:right;color:var(--muted);border:0;background:none;padding:0 0 0 8px}
+.legend.min .body{display:none}
+.mapbadge{background:rgba(255,255,255,.96);border-radius:20px;padding:6px 12px;box-shadow:var(--shadow);font-size:12.5px;display:flex;align-items:center;gap:8px}
+.mapbadge button{border:0;background:none;color:var(--brand);font-weight:650;cursor:pointer;padding:0}
+.pin{filter:drop-shadow(0 1px 2px rgba(0,0,0,.45))}
+.rep{filter:drop-shadow(0 1px 1.5px rgba(0,0,0,.5))}
+.cl{background:var(--navy);color:#fff;border:3px solid #fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;box-shadow:0 1px 4px rgba(0,0,0,.4)}
+.dlabel{background:none;border:0;box-shadow:none;color:#18314f;font-weight:700;font-size:12px;text-shadow:0 0 3px #fff,0 0 3px #fff,0 0 3px #fff;white-space:nowrap}
+.leaflet-popup-content{margin:12px 14px;min-width:200px;max-width:260px;line-height:1.45}
+.pop h4{margin:0 0 4px;font-size:14px}
+.pop .meta{color:var(--muted);font-size:12px;margin-bottom:6px}
+.pop img{width:100%;border-radius:7px;margin:6px 0 2px;display:block;background:#eef1f6;min-height:60px}
+.pop .flag{font-size:11.5px;color:#6b4d00;background:#fff4d6;border-radius:6px;padding:4px 7px;margin-top:6px}
+.pop dl{margin:6px 0 0;display:grid;grid-template-columns:auto 1fr;gap:2px 10px;font-size:12.5px}
+.pop dt{color:var(--muted)}
+.pop dd{margin:0}
+
+dialog{border:0;border-radius:14px;max-width:560px;width:calc(100vw - 32px);padding:0;box-shadow:0 12px 50px rgba(0,0,0,.35)}
+dialog::backdrop{background:rgba(10,20,35,.5)}
+dialog .in{padding:20px 22px 18px;max-height:80vh;overflow:auto}
+dialog h2{font-size:19px}
+dialog ul{padding-left:18px;margin:4px 0 10px}
+
+footer.disc .mob{display:none}
+footer.disc{flex:0 0 auto;background:#fff8e8;border-top:1px solid #f0dca8;color:#5c4308;font-size:12px;padding:5px 14px;display:flex;gap:6px 14px;flex-wrap:wrap;justify-content:center}
+
+@media (max-width:820px){
+  header .sub{display:none}
+  header h1{font-size:14.5px;white-space:normal}
+  footer.disc{padding:4px 10px;font-size:11px;line-height:1.3}
+  footer.disc .dsk{display:none}
+  footer.disc .mob{display:inline}
+  main{flex-direction:column-reverse}
+  #panel{width:100%;max-width:none;height:50vh;border-right:0;border-top:1px solid var(--line)}
+  #panel.folded{height:auto}
+  #panel.folded .tabpane{display:none!important}
+  #tabs .fold{display:flex}
+  .tiles{grid-template-columns:repeat(3,1fr)}
+  .legend{display:none}
+}
+@media (max-width:420px){ .btn.cta .long{display:none} }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <h1>Western Province Disaster Watch</h1>
+    <div class="sub"><i style="--c:var(--flood)">Floods</i><i style="--c:var(--slide)">Landslides</i><i style="--c:var(--storm)">Storm damage</i><span>Colombo · Gampaha · Kalutara</span></div>
+  </div>
+  <div class="sp"></div>
+  <button class="btn ghost small" id="aboutBtn" type="button">About</button>
+  <button class="btn cta" id="reportBtn" type="button">Report<span class="long">&nbsp;an incident</span></button>
+</header>
+
+<main>
+  <aside id="panel" aria-label="Map controls">
+    <div id="tabs" role="tablist">
+      <button role="tab" id="tab-layers" data-tab="layers" aria-selected="true" aria-controls="pane-layers">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3 3 8l9 5 9-5-9-5Z"/><path d="m3 13 9 5 9-5"/></svg>Layers</button>
+      <button role="tab" id="tab-report" data-tab="report" aria-selected="false" aria-controls="pane-report">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 21s7-6.2 7-11.5A7 7 0 0 0 5 9.5C5 14.8 12 21 12 21Z"/><path d="M12 7v5M12 14.5v.5"/></svg>Report</button>
+      <button role="tab" id="tab-insights" data-tab="insights" aria-selected="false" aria-controls="pane-insights">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Insights</button>
+      <button role="tab" id="tab-live" data-tab="live" aria-selected="false" aria-controls="pane-live">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18a4 4 0 0 1-.5-8A5.5 5.5 0 0 1 17 8.6 3.7 3.7 0 0 1 17 18H7Z"/><path d="m9 21 1-2m4 2 1-2"/></svg>Live</button>
+      <button class="fold" id="foldBtn" type="button" aria-label="Collapse or expand panel" title="Collapse or expand panel">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path id="foldIcon" d="m6 15 6-6 6 6"/></svg></button>
+    </div>
+
+    <!-- LAYERS -->
+    <section class="tabpane on" id="pane-layers" role="tabpanel" aria-labelledby="tab-layers">
+      <h2>Map layers</h2>
+      <p class="hint">Filled symbols are public reports. Hollow symbols and shaded areas come from official or source datasets.</p>
+      <h3>Basemap</h3>
+      <div class="seg" id="basemapSeg">
+        <button type="button" data-bm="light" aria-pressed="true">Light</button>
+        <button type="button" data-bm="osm" aria-pressed="false">Streets</button>
+        <button type="button" data-bm="sat" aria-pressed="false">Satellite</button>
+      </div>
+      <div id="layerList"></div>
+      <div class="notice info" style="margin-top:16px">Landslide susceptibility and other hazard layers can be added from <code>data/</code> and the <code>LAYERS</code> list in <code>index.html</code>.</div>
+    </section>
+
+    <!-- REPORT -->
+    <section class="tabpane" id="pane-report" role="tabpanel" aria-labelledby="tab-report">
+      <h2>Report a disaster incident</h2>
+      <p class="hint">Takes about a minute. No name, phone number or e-mail is needed.</p>
+      <div class="notice bad"><b>Life in danger?</b> Call the Disaster Management Centre on <b>117</b> or Police on <b>119</b>. This map is not an emergency service.</div>
+
+      <form id="reportForm" novalidate autocomplete="off">
+        <div class="step"><div class="n">1</div><div class="body">
+          <span class="t" style="font-weight:650;display:block;margin-bottom:5px">Where did it happen?</span>
+          <div class="loc">
+            <button type="button" class="btn small line" id="pickBtn">Tap the map</button>
+            <button type="button" class="btn small line" id="gpsBtn">Use my location</button>
+            <div class="locbox" id="locBox" aria-live="polite">No location chosen yet. Tap the map, or drag the pin to adjust it.</div>
+          </div>
+        </div></div>
+
+        <div class="step"><div class="n">2</div><div class="body">
+          <span class="t" style="font-weight:650;display:block;margin-bottom:5px">What happened?</span>
+          <div class="opt three" id="typeOpts">
+            <div style="--c:var(--flood)"><input type="radio" name="type" id="t-flood" value="Flood"><label for="t-flood"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11Z"/></svg>Flood</label></div>
+            <div style="--c:var(--slide)"><input type="radio" name="type" id="t-slide" value="Landslide"><label for="t-slide"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 20 11 5l5 8 2-3 3 10H3Z"/></svg>Landslide</label></div>
+            <div style="--c:var(--storm)"><input type="radio" name="type" id="t-storm" value="Storm damage"><label for="t-storm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z"/></svg>Storm damage</label></div>
+          </div>
+          <div id="detailWrap" style="margin-top:10px;display:none">
+            <label class="t" for="detail" id="detailLabel" style="font-weight:600;display:block;margin-bottom:4px"></label>
+            <select id="detail"></select>
+          </div>
+        </div></div>
+
+        <div class="step"><div class="n">3</div><div class="body">
+          <span class="t" style="font-weight:650;display:block;margin-bottom:5px">How severe is it?</span>
+          <div class="opt four sev" id="sevOpts">
+            <div><input type="radio" name="sev" id="s-1" value="Minor"><label for="s-1">Minor</label></div>
+            <div><input type="radio" name="sev" id="s-2" value="Moderate"><label for="s-2">Moderate</label></div>
+            <div><input type="radio" name="sev" id="s-3" value="Severe"><label for="s-3">Severe</label></div>
+            <div><input type="radio" name="sev" id="s-4" value="Not sure"><label for="s-4">Not sure</label></div>
+          </div>
+        </div></div>
+
+        <div class="step"><div class="n">4</div><div class="body">
+          <label class="t" for="date" style="font-weight:650;display:block;margin-bottom:5px">When did you see it?</label>
+          <input type="date" id="date">
+        </div></div>
+
+        <div class="step"><div class="n">5</div><div class="body">
+          <label class="t" for="desc" style="font-weight:650;display:block;margin-bottom:5px">Short description <span class="hint" style="font-weight:400">(optional)</span></label>
+          <textarea id="desc" maxlength="500" placeholder="e.g. Road to the school is under water, vehicles cannot pass."></textarea>
+          <div class="cnt"><span id="descCnt">0</span>/500 &middot; Please do not write names, phone numbers or house numbers.</div>
+        </div></div>
+
+        <div class="step"><div class="n">6</div><div class="body">
+          <label class="t" for="photo" style="font-weight:650;display:block;margin-bottom:5px">Photo <span class="hint" style="font-weight:400">(optional)</span></label>
+          <input type="file" id="photo" accept="image/*">
+          <img id="photoPrev" alt="Selected photo preview">
+          <div class="hint" style="margin-top:4px">Photos are resized on your device and camera location data (EXIF) is removed. Avoid showing faces or number plates.</div>
+        </div></div>
+
+        <div class="hp" aria-hidden="true"><label>Leave empty <input type="text" id="website" tabindex="-1" autocomplete="off"></label></div>
+
+        <label class="check"><input type="checkbox" id="consent"><span>I understand my report will be reviewed before it is shown publicly, may be wrong or incomplete, and is not an emergency call.</span></label>
+        <div class="err" id="formErr" role="alert"></div>
+        <button type="submit" class="btn cta" id="submitBtn">Submit report</button>
+      </form>
+      <div id="formOk" class="notice ok" style="display:none;margin-top:14px" role="status"></div>
+    </section>
+
+    <!-- INSIGHTS -->
+    <section class="tabpane" id="pane-insights" role="tabpanel" aria-labelledby="tab-insights">
+      <h2>Planning insights</h2>
+      <p class="hint">Public reports show where people reported problems, not the full pattern of risk. Areas with fewer residents or less phone coverage report less.</p>
+
+      <h3>Public reports (reviewed)</h3>
+      <div class="tiles" id="repTiles"></div>
+      <div id="repTable" style="margin-top:10px"></div>
+      <div class="row" style="margin-top:10px;justify-content:space-between">
+        <span class="hint" id="repStamp"></span>
+        <button class="btn small line" id="refreshBtn" type="button">Refresh</button>
+      </div>
+
+      <h3>Cyclone Ditwah footprint by district</h3>
+      <div id="distTable"></div>
+      <div class="src" id="distNote"></div>
+
+      <h3>Flood hotspots (Ditwah)</h3>
+      <p class="hint">Footprint cells summed on a 0.02° grid (about 2 km). Click a row to zoom.</p>
+      <div id="hotTable"></div>
+
+      <h3>Landslide points: distance to help</h3>
+      <div id="lsTable"></div>
+      <div class="src">Straight-line distance to the nearest hospital-grade facility (teaching, general, base, divisional or specialised) and police station. Road travel time will be longer.</div>
+    </section>
+
+    <!-- LIVE -->
+    <section class="tabpane" id="pane-live" role="tabpanel" aria-labelledby="tab-live">
+      <h2>Live conditions</h2>
+      <p class="hint">Weather and modelled river flow from Open-Meteo. These are model outputs, not official warnings.</p>
+
+      <h3>Weather and rainfall</h3>
+      <div class="seg" id="placeSeg"></div>
+      <p class="hint" style="margin-top:6px">Or tap anywhere on the map while this tab is open.</p>
+      <div class="card" id="wxCard" style="margin-top:8px"><span class="hint">Loading weather&hellip;</span></div>
+
+      <h3>River discharge (modelled)</h3>
+      <div id="riverList"><span class="hint">Loading river data&hellip;</span></div>
+      <div class="src" id="riverNote"></div>
+
+      <h3>Official sources</h3>
+      <div class="links">
+        <a href="https://www.dmc.gov.lk" target="_blank" rel="noopener">Disaster Management Centre</a>
+        <a href="https://www.meteo.gov.lk" target="_blank" rel="noopener">Dept. of Meteorology</a>
+        <a href="https://www.irrigation.gov.lk" target="_blank" rel="noopener">Irrigation Department</a>
+        <a href="https://www.nbro.gov.lk" target="_blank" rel="noopener">NBRO (landslides)</a>
+      </div>
+      <div class="src">Official river gauge levels (for example Hanwella and Glencourse) are published by the Irrigation Department and DMC and are not included here.</div>
+    </section>
+  </aside>
+
+  <div id="map" role="application" aria-label="Interactive disaster map"></div>
+</main>
+
+<footer class="disc">
+  <span class="dsk"><b>Public reports are community observations, reviewed before publishing but not field-verified.</b></span>
+  <span class="dsk">This map is not an official early-warning system. Emergency: DMC 117 · Police 119.</span>
+  <span class="mob"><b>Community reports are not field-verified.</b> Not an official warning system. Emergency: 117 / 119</span>
+</footer>
+
+<dialog id="aboutDlg"><div class="in">
+  <h2>About this map</h2>
+  <p>Western Province Disaster Watch brings official datasets and community reports together for <b>Colombo, Gampaha and Kalutara</b> districts, to help residents and planners see where floods, landslides and storm damage are happening.</p>
+  <h3 style="margin-top:12px">How to use it</h3>
+  <ul>
+    <li><b>Layers</b>: turn datasets on and off and change the basemap.</li>
+    <li><b>Report</b>: tap the map, choose what happened, add a photo if you can, and submit anonymously.</li>
+    <li><b>Insights</b>: counts by district, Cyclone Ditwah flood footprint, flood hotspots and landslide access.</li>
+    <li><b>Live</b>: weather forecast and modelled river flow.</li>
+  </ul>
+  <h3>Privacy</h3>
+  <p>No name, phone number, e-mail or account is collected. Your report contains the location you choose, your answers and an optional photo. Photos are resized on your device and camera location data is removed. Reports are reviewed before publishing and sensitive ones are not shown.</p>
+  <h3>Data</h3>
+  <p class="hint">Administrative boundaries: UN OCHA / Survey Department of Sri Lanka (COD). Hospitals and police stations: Sri Lanka NSDI / Survey Department. Water bodies and wetlands: OpenStreetMap contributors. Cyclone Ditwah flood footprint, landslide locations and soil conservation areas: course dataset provided for this assignment. Weather and river discharge: <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo.com</a> (river data from GloFAS). Basemaps: CARTO, OpenStreetMap, Esri.</p>
+  <div style="text-align:right"><button class="btn cta" id="aboutClose" type="button">Got it</button></div>
+</div></dialog>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.js"></script>
+<script>
+/* =========================================================================
+   CONFIG: edit these values
+   ========================================================================= */
+const CONFIG = {
+  // Google Apps Script web app that stores reports in your Google Sheet
+  SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbxcsP_UIDckTGOhEvmFZbRtSbbDkK3bjpQxz98KVkarauTkjgmSPw-4ia-rfVPd3JEp/exec',
+  TZ: 'Asia/Colombo',
+  PLACES: {
+    Colombo:  { lat: 6.9271, lng: 79.8612 },
+    Gampaha:  { lat: 7.0917, lng: 79.9999 },
+    Kalutara: { lat: 6.5854, lng: 79.9607 }
+  },
+  // Approximate points on rivers; the model snaps each to its nearest 5 km grid cell.
+  RIVERS: [
+    { name: 'Kelani Ganga, Hanwella',          lat: 6.905, lng: 80.082 },
+    { name: 'Kelani Ganga, Colombo (Nagalagam)', lat: 6.968, lng: 79.877 },
+    { name: 'Kalu Ganga, Kalutara',            lat: 6.585, lng: 79.963 },
+    { name: 'Attanagalu Oya, Gampaha',         lat: 7.110, lng: 80.000 },
+    { name: 'Maha Oya, Gampaha district',      lat: 7.150, lng: 79.900 }
+  ]
+};
+
+const TYPE = {
+  'Flood':        { color: '#1f6fd1', short: 'Flood',  shape: 'circle' },
+  'Landslide':    { color: '#b4571f', short: 'Landslide', shape: 'tri' },
+  'Storm damage': { color: '#7a4bc2', short: 'Storm',  shape: 'diamond' }
+};
+const DETAIL = {
+  'Flood': { label: 'Approximate water depth', opts: ['Ankle deep (under 0.3 m)', 'Knee deep (0.3 to 0.6 m)', 'Waist deep (0.6 to 1 m)', 'Chest height or more (over 1 m)', 'Not sure'] },
+  'Landslide': { label: 'What do you see?', opts: ['Slope failure / earth slip', 'Rock fall', 'Cracks in ground or slope', 'Road blocked by debris', 'Houses affected', 'Not sure'] },
+  'Storm damage': { label: 'Type of damage', opts: ['Fallen tree', 'Roof damage', 'Power lines down', 'Damaged building or wall', 'Other'] }
+};
+const SEV_SIZE = { 'Minor': 20, 'Moderate': 26, 'Severe': 32, 'Not sure': 22 };
+
+/* =========================================================================
+   helpers
+   ========================================================================= */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const fmt = (n, d = 0) => Number(n).toLocaleString('en-GB', { minimumFractionDigits: d, maximumFractionDigits: d });
+const todayStr = () => new Date().toLocaleDateString('en-CA', { timeZone: CONFIG.TZ });
+function niceDate(v) {
+  if (!v) return '';
+  const s = String(v);
+  const d = s.length > 10 ? new Date(s) : new Date(s + 'T00:00:00Z');
+  if (isNaN(d)) return s.slice(0, 10);
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: s.length > 10 ? CONFIG.TZ : 'UTC' });
+}
+function safePhoto(u) {
+  u = String(u || '');
+  return /^https:\/\/(drive|lh3)\.(google|googleusercontent)\.com\//.test(u) ? u : '';
+}
+function haversine(a, b) {
+  const R = 6371, t = x => x * Math.PI / 180;
+  const dLat = t(b[0] - a[0]), dLng = t(b[1] - a[1]);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(t(a[0])) * Math.cos(t(b[0])) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+function ringHas(ring, x, y) {
+  let c = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i], [xj, yj] = ring[j];
+    if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c;
+  }
+  return c;
+}
+function polyHas(poly, x, y) {
+  if (!ringHas(poly[0], x, y)) return false;
+  for (let k = 1; k < poly.length; k++) if (ringHas(poly[k], x, y)) return false;
+  return true;
+}
+function geomHas(g, x, y) {
+  if (g.type === 'Polygon') return polyHas(g.coordinates, x, y);
+  if (g.type === 'MultiPolygon') return g.coordinates.some(p => polyHas(p, x, y));
+  return false;
+}
+async function getJSON(url, opts) {
+  const r = await fetch(url, opts);
+  if (!r.ok) throw new Error(url + ' ' + r.status);
+  return r.json();
+}
+
+/* =========================================================================
+   map + panes
+   ========================================================================= */
+const map = L.map('map', { zoomControl: false, preferCanvas: true, minZoom: 8, maxZoom: 18, zoomSnap: 0.25, zoomDelta: 0.5 }).setView([6.95, 80.0], 9);
+L.control.zoom({ position: 'topright' }).addTo(map);
+L.control.scale({ position: 'bottomleft', imperial: false }).addTo(map);
+map.createPane('areas').style.zIndex = 380;
+map.createPane('hazard').style.zIndex = 410;
+map.createPane('outline').style.zIndex = 420; $('.leaflet-outline-pane', map.getContainer()).style.pointerEvents = 'none';
+map.createPane('pts').style.zIndex = 450;
+
+const BASEMAPS = {
+  light: L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { subdomains: 'abcd', maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>' }),
+  osm: L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' }),
+  sat: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: 'Tiles &copy; Esri, Maxar, Earthstar Geographics' })
+};
+let currentBase = 'light';
+BASEMAPS.light.addTo(map);
+$$('#basemapSeg button').forEach(b => b.addEventListener('click', () => {
+  map.removeLayer(BASEMAPS[currentBase]);
+  currentBase = b.dataset.bm;
+  BASEMAPS[currentBase].addTo(map).bringToBack();
+  $$('#basemapSeg button').forEach(x => x.setAttribute('aria-pressed', x === b));
+}));
+
+/* =========================================================================
+   state
+   ========================================================================= */
+const S = {
+  data: {}, stats: null, tab: 'layers',
+  reports: [], reportsOk: false, reportsAt: null,
+  typeOn: { 'Flood': true, 'Landslide': true, 'Storm damage': true },
+  heat: false,
+  rivers: [], riverLayer: L.layerGroup(),
+  wxPoint: null, wxMarker: null
+};
+
+function popup(latlng, html) { L.popup({ maxWidth: 280 }).setLatLng(latlng).setContent(html).openOn(map); }
+function info(layer, fn) {
+  layer.on('click', e => {
+    if (S.tab === 'report' && layer instanceof L.Path && !(layer instanceof L.CircleMarker)) return;
+    if (S.tab === 'report' && layer instanceof L.CircleMarker) return;
+    popup(e.latlng || layer.getLatLng(), fn());
+  });
+}
+
+/* =========================================================================
+   layer definitions
+   ========================================================================= */
+const tri = (c, s = 16, hollow = false) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24"><polygon points="12,3 22,21 2,21" fill="${hollow ? '#fff' : c}" stroke="${hollow ? c : '#fff'}" stroke-width="${hollow ? 3 : 2.5}" stroke-linejoin="round"/></svg>`;
+const circ = (c, s = 16, hollow = false) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="${hollow ? '#fff' : c}" stroke="${hollow ? c : '#fff'}" stroke-width="${hollow ? 3 : 2.5}"/></svg>`;
+const dia = (c, s = 16, hollow = false) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24"><polygon points="12,2 22,12 12,22 2,12" fill="${hollow ? '#fff' : c}" stroke="${hollow ? c : '#fff'}" stroke-width="${hollow ? 3 : 2.5}" stroke-linejoin="round"/></svg>`;
+const shapeSvg = { circle: circ, tri, diamond: dia };
+const box = (fill, stroke, dash) => `<svg width="18" height="18" viewBox="0 0 18 18"><rect x="1.5" y="1.5" width="15" height="15" rx="2" fill="${fill}" stroke="${stroke}" stroke-width="1.5" ${dash ? 'stroke-dasharray="3 2"' : ''}/></svg>`;
+const dotSw = (c, r = 5) => `<svg width="18" height="18" viewBox="0 0 18 18"><circle cx="9" cy="9" r="${r}" fill="${c}" stroke="#fff" stroke-width="1.5"/></svg>`;
+
+const LAYERS = [
+  { group: 'Public reports', items: [
+    { id: 'rep-Flood', name: 'Flood reports', sw: circ(TYPE['Flood'].color), on: true, report: 'Flood' },
+    { id: 'rep-Landslide', name: 'Landslide reports', sw: tri(TYPE['Landslide'].color), on: true, report: 'Landslide' },
+    { id: 'rep-Storm damage', name: 'Storm damage reports', sw: dia(TYPE['Storm damage'].color), on: true, report: 'Storm damage' },
+    { id: 'heat', name: 'Report hotspots (heatmap)', sw: box('#ff7b39', '#c2410c'), on: false, desc: 'Shows the density of reviewed reports instead of pins.' }
+  ]},
+  { group: 'Cyclone Ditwah (source data)', items: [
+    { id: 'flood', name: 'Flooded areas', sw: box('#17a2b8', '#0e7c8f'), on: true, file: 'flood', desc: 'Flood footprint cells; value is the source "count" field.' },
+    { id: 'floodheat', name: 'Flood density (heat)', sw: box('#f59e0b', '#b45309'), on: false, file: 'flood', desc: 'Footprint cells weighted by their count value.' },
+    { id: 'landslides', name: 'Landslide locations', sw: tri('#b4571f', 16, true), on: true, file: 'landslides' }
+  ]},
+  { group: 'Hazard context', items: [
+    { id: 'soil', name: 'Soil conservation area', sw: box('rgba(217,140,43,.3)', '#c27a1d', true), on: false, file: 'soil' },
+    { id: 'wetlands', name: 'Wetlands', sw: box('rgba(80,160,90,.45)', '#3d8a49'), on: false, file: 'wetlands' },
+    { id: 'water', name: 'Water bodies and rivers', sw: box('rgba(110,170,225,.6)', '#5e9bd6'), on: false, file: 'water' }
+  ]},
+  { group: 'Services', items: [
+    { id: 'hosp', name: 'Hospitals', sw: dotSw('#c0392b', 5.5), on: true, file: 'hospitals', desc: 'Teaching, general, base, divisional and specialised hospitals.' },
+    { id: 'clinic', name: 'Clinics and other health facilities', sw: dotSw('#e8a09a', 4), on: false, file: 'hospitals', desc: 'Dispensaries, PMCUs, MOH offices and others.' },
+    { id: 'police', name: 'Police stations', sw: dotSw('#2c3e8f', 5), on: false, file: 'police' }
+  ]},
+  { group: 'Live data (Open-Meteo)', items: [
+    { id: 'rivers', name: 'Modelled river discharge', sw: box('#2a9d8f', '#fff'), on: true, desc: 'Colour shows the forecast trend, see the Live tab.' }
+  ]},
+  { group: 'Boundaries', items: [
+    { id: 'districts', name: 'District boundaries', sw: box('none', '#35506f', true), on: true, file: 'districts' }
+  ]}
+];
+
+const built = {};     // id -> leaflet layer
+const state = {};     // id -> bool
+
+function buildLayer(id) {
+  const D = S.data;
+  switch (id) {
+    case 'districts': {
+      const g = L.geoJSON(D.districts, { pane: 'outline', style: { color: '#35506f', weight: 1.6, dashArray: '6 5', fill: false }, interactive: false });
+      const lbl = L.layerGroup();
+      [['Colombo', 6.87, 79.94], ['Gampaha', 7.14, 80.05], ['Kalutara', 6.50, 80.02]].forEach(([n, a, b]) =>
+        L.marker([a, b], { interactive: false, pane: 'outline', icon: L.divIcon({ className: 'dlabel', html: n.toUpperCase(), iconSize: [90, 16], iconAnchor: [45, 8] }) }).addTo(lbl));
+      return L.layerGroup([g, lbl]);
+    }
+    case 'flood': {
+      const l = L.geoJSON(D.flood, { pane: 'hazard', style: { color: '#0e7c8f', weight: 1.6, fillColor: '#17a2b8', fillOpacity: .7 } });
+      l.eachLayer(x => info(x, () => `<div class="pop"><h4>Flooded area (Cyclone Ditwah)</h4><div class="meta">Source footprint cell</div><dl><dt>Count value</dt><dd>${fmt(x.feature.properties.count)}</dd></dl><div class="flag">Source dataset. Not an official flood map.</div></div>`));
+      return l;
+    }
+    case 'floodheat': {
+      const pts = D.flood.features.map(f => {
+        const rings = f.geometry.type === 'Polygon' ? [f.geometry.coordinates[0]] : f.geometry.coordinates.map(p => p[0]);
+        let x = 0, y = 0, n = 0; rings.forEach(r => r.forEach(p => { x += p[0]; y += p[1]; n++; }));
+        return [y / n, x / n, Math.min(1, f.properties.count / 300)];
+      });
+      return L.heatLayer(pts, { radius: 22, blur: 18, minOpacity: .35, maxZoom: 13, gradient: { .25: '#fde68a', .5: '#fb923c', .75: '#ef4444', 1: '#7f1d1d' } });
+    }
+    case 'landslides': {
+      const l = L.layerGroup();
+      D.landslides.features.forEach(f => {
+        const [x, y] = f.geometry.coordinates, p = f.properties;
+        const m = L.marker([y, x], { pane: 'pts', icon: L.divIcon({ className: 'rep', html: tri('#b4571f', 20, true), iconSize: [20, 20], iconAnchor: [10, 14] }) });
+        m.on('click', () => popup([y, x], `<div class="pop"><h4>Landslide location #${p.n}</h4><div class="meta">Cyclone Ditwah source dataset</div><dl><dt>Inside Western Province</dt><dd>${p.inside ? 'Yes' : 'No (shown for context)'}</dd></dl><div class="flag">Source dataset. Not an official hazard assessment.</div></div>`));
+        m.addTo(l);
+      });
+      return l;
+    }
+    case 'soil': {
+      const l = L.geoJSON(D.soil, { pane: 'areas', style: { color: '#c27a1d', weight: 1.2, dashArray: '5 4', fillColor: '#d98c2b', fillOpacity: .22 } });
+      l.eachLayer(x => info(x, () => `<div class="pop"><h4>Soil conservation area</h4><div class="meta">Low Country Wet Zone, source dataset</div></div>`));
+      return l;
+    }
+    case 'wetlands': {
+      const l = L.geoJSON(D.wetlands, { pane: 'areas', style: { color: '#3d8a49', weight: .6, fillColor: '#50a05a', fillOpacity: .45 } });
+      l.eachLayer(x => info(x, () => `<div class="pop"><h4>${esc(x.feature.properties.name || 'Wetland')}</h4><div class="meta">Wetland, OpenStreetMap</div><dl><dt>Area</dt><dd>${fmt(x.feature.properties.ha, 1)} ha</dd></dl></div>`));
+      return l;
+    }
+    case 'water': {
+      const l = L.geoJSON(D.water, { pane: 'areas', style: { color: '#5e9bd6', weight: .5, fillColor: '#6eaae1', fillOpacity: .6 } });
+      l.eachLayer(x => info(x, () => `<div class="pop"><h4>${esc(x.feature.properties.name || 'Water body')}</h4><div class="meta">${esc(x.feature.properties.kind)}, OpenStreetMap</div></div>`));
+      return l;
+    }
+    case 'hosp': case 'clinic': {
+      const major = id === 'hosp';
+      const l = L.layerGroup();
+      D.hospitals.features.filter(f => f.properties.major === major).forEach(f => {
+        const [x, y] = f.geometry.coordinates, p = f.properties;
+        const c = L.circleMarker([y, x], { pane: 'pts', radius: major ? 4.5 : 3.2, color: '#fff', weight: 1.2, fillColor: major ? '#c0392b' : '#e8a09a', fillOpacity: 1 });
+        info(c, () => `<div class="pop"><h4>${esc(p.name)}</h4><div class="meta">${esc(p.cat)} &middot; ${esc(p.district || '')}</div></div>`);
+        c.addTo(l);
+      });
+      return l;
+    }
+    case 'police': {
+      const l = L.layerGroup();
+      D.police.features.forEach(f => {
+        const [x, y] = f.geometry.coordinates;
+        const c = L.circleMarker([y, x], { pane: 'pts', radius: 5, color: '#fff', weight: 1.2, fillColor: '#2c3e8f', fillOpacity: 1 });
+        info(c, () => `<div class="pop"><h4>${esc(f.properties.name)}</h4><div class="meta">Police station</div></div>`);
+        c.addTo(l);
+      });
+      return l;
+    }
+  }
+}
+
+function setLayer(id, on) {
+  state[id] = on;
+  if (id.startsWith('rep-')) { S.typeOn[id.slice(4)] = on; renderReports(); return; }
+  if (id === 'heat') { S.heat = on; renderReports(); return; }
+  if (id === 'rivers') { on ? S.riverLayer.addTo(map) : map.removeLayer(S.riverLayer); return; }
+  if (!built[id]) built[id] = buildLayer(id);
+  on ? built[id].addTo(map) : map.removeLayer(built[id]);
+}
+
+function renderLayerList() {
+  const wrap = $('#layerList');
+  wrap.innerHTML = LAYERS.map(g => `<h3>${esc(g.group)}</h3>` + g.items.map(it => `
+    <label class="lyr"><input type="checkbox" data-id="${it.id}" ${it.on ? 'checked' : ''}>
+      <span class="sw">${it.sw}</span>
+      <span class="nm">${esc(it.name)}${it.desc ? `<small>${esc(it.desc)}</small>` : ''}</span>
+      <span class="ct" id="ct-${it.id}"></span></label>`).join('')).join('');
+  $$('input[data-id]', wrap).forEach(cb => cb.addEventListener('change', () => setLayer(cb.dataset.id, cb.checked)));
+}
+
+/* =========================================================================
+   public reports
+   ========================================================================= */
+let cluster = null, heat = null;
+function reportIcon(r) {
+  const t = TYPE[r.incident_type] || TYPE['Flood'];
+  const s = SEV_SIZE[r.severity] || 22;
+  return L.divIcon({ className: 'rep', html: shapeSvg[t.shape](t.color, s), iconSize: [s, s], iconAnchor: [s / 2, s / 2] });
+}
+function nearest(list, ll) {
+  let best = null;
+  list.forEach(f => { const d = haversine(ll, [f.geometry.coordinates[1], f.geometry.coordinates[0]]); if (!best || d < best.d) best = { d, f }; });
+  return best;
+}
+function reportPopup(r) {
+  const t = TYPE[r.incident_type] || { color: '#555' };
+  const ll = [r.lat, r.lng];
+  const h = S.data.hospitals ? nearest(S.data.hospitals.features.filter(f => f.properties.major), ll) : null;
+  const p = S.data.police ? nearest(S.data.police.features, ll) : null;
+  const inFlood = S.data.flood ? S.data.flood.features.some(f => geomHas(f.geometry, r.lng, r.lat)) : false;
+  const ph = safePhoto(r.photo_url);
+  return `<div class="pop">
+    <h4><span class="dot" style="--c:${t.color}"></span>${esc(r.incident_type)}</h4>
+    <div class="meta">${esc(r.severity)} &middot; ${esc(niceDate(r.incident_date || r.created_at))}${r.district ? ' &middot; ' + esc(r.district) : ''}</div>
+    ${r.detail ? `<div><b>${esc(r.detail)}</b></div>` : ''}
+    ${r.description ? `<div>${esc(r.description)}</div>` : ''}
+    ${ph ? `<a href="${esc(ph.replace('&sz=w800', '&sz=w1600'))}" target="_blank" rel="noopener"><img loading="lazy" referrerpolicy="no-referrer" src="${esc(ph)}" alt="Photo submitted with this report"></a>` : ''}
+    <dl>
+      ${h ? `<dt>Nearest hospital</dt><dd>${esc(h.f.properties.name)}, ${fmt(h.d, 1)} km</dd>` : ''}
+      ${p ? `<dt>Nearest police</dt><dd>${esc(p.f.properties.name)}, ${fmt(p.d, 1)} km</dd>` : ''}
+      <dt>In Ditwah flood footprint</dt><dd>${inFlood ? 'Yes' : 'No'}</dd>
+    </dl>
+    <div class="flag">Community report, reviewed but not field-verified. Not an official record.</div></div>`;
+}
+function renderReports() {
+  if (cluster) { map.removeLayer(cluster); cluster = null; }
+  if (heat) { map.removeLayer(heat); heat = null; }
+  const list = S.reports.filter(r => S.typeOn[r.incident_type]);
+  Object.keys(TYPE).forEach(t => { const e = $('#ct-rep-' + CSS.escape(t)); if (e) e.textContent = S.reports.filter(r => r.incident_type === t).length || ''; });
+  if (S.heat) {
+    if (list.length && L.heatLayer) {
+      heat = L.heatLayer(list.map(r => [r.lat, r.lng, { 'Minor': .4, 'Moderate': .7, 'Severe': 1 }[r.severity] || .5]), { radius: 32, blur: 24, maxZoom: 13, gradient: { .3: '#fde68a', .6: '#fb923c', 1: '#b91c1c' } }).addTo(map);
+    }
+    return;
+  }
+  cluster = L.markerClusterGroup ? L.markerClusterGroup({
+    maxClusterRadius: 38, showCoverageOnHover: false,
+    iconCreateFunction: c => { const n = c.getChildCount(); return L.divIcon({ className: '', html: `<div class="cl" style="width:36px;height:36px">${n}</div>`, iconSize: [36, 36] }); }
+  }) : L.layerGroup();
+  list.forEach(r => {
+    const m = L.marker([r.lat, r.lng], { icon: reportIcon(r), pane: 'pts', title: r.incident_type + ', ' + r.severity });
+    m.bindPopup(() => reportPopup(r), { maxWidth: 280 });
+    cluster.addLayer ? cluster.addLayer(m) : m.addTo(cluster);
+  });
+  cluster.addTo(map);
+}
+function renderInsightsReports() {
+  const R = S.reports, types = Object.keys(TYPE);
+  $('#repTiles').innerHTML = types.map(t => `<div class="tile" style="--c:${TYPE[t].color}"><b>${R.filter(r => r.incident_type === t).length}</b><span>${esc(TYPE[t].short)}</span></div>`).join('');
+  const ds = ['Colombo', 'Gampaha', 'Kalutara'];
+  if (!S.reportsOk) { $('#repTable').innerHTML = `<div class="notice">Public reports could not be loaded right now. Please try Refresh.</div>`; }
+  else if (!R.length) { $('#repTable').innerHTML = `<div class="notice info">No reviewed reports yet. New reports appear here after they are reviewed. Use the <b>Report</b> tab to add one.</div>`; }
+  else {
+    $('#repTable').innerHTML = `<table class="t"><thead><tr><th>District</th>${types.map(t => `<th><span class="dot" style="--c:${TYPE[t].color}"></span>${esc(TYPE[t].short)}</th>`).join('')}<th>Total</th></tr></thead><tbody>${ds.map(d => {
+      const row = types.map(t => R.filter(r => r.district === d && r.incident_type === t).length);
+      return `<tr><td>${d}</td>${row.map(n => `<td>${n}</td>`).join('')}<td><b>${row.reduce((a, b) => a + b, 0)}</b></td></tr>`;
+    }).join('')}</tbody></table>`;
+  }
+  $('#repStamp').textContent = S.reportsAt ? 'Updated ' + S.reportsAt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: CONFIG.TZ }) : '';
+}
+async function loadReports() {
+  $('#refreshBtn').disabled = true;
+  try {
+    const d = await getJSON(CONFIG.SCRIPT_URL);
+    if (!Array.isArray(d)) throw new Error('bad payload');
+    S.reports = d.filter(r => TYPE[r.incident_type] && isFinite(r.lat) && isFinite(r.lng));
+    S.reportsOk = true; S.reportsAt = new Date();
+  } catch (e) { console.warn('reports', e); S.reportsOk = false; }
+  $('#refreshBtn').disabled = false;
+  renderReports(); renderInsightsReports(); updateBadge();
+}
+let badge;
+function updateBadge() {
+  if (!badge) return;
+  const n = S.reports.length;
+  badge.getContainer().firstChild.innerHTML = S.reportsOk
+    ? `<span><b>${n}</b> reviewed public report${n === 1 ? '' : 's'}</span><button type="button" id="badgeAdd">+ Report</button>`
+    : `<span>Public reports unavailable</span><button type="button" id="badgeAdd">+ Report</button>`;
+  $('#badgeAdd').onclick = () => setTab('report');
+}
+
+/* =========================================================================
+   report form
+   ========================================================================= */
+const F = { latlng: null, marker: null, photo: null, busy: false };
+const pinIcon = L.divIcon({ className: 'pin', iconSize: [30, 40], iconAnchor: [15, 38], html: '<svg width="30" height="40" viewBox="0 0 30 40"><path d="M15 39S2 25 2 14.5a13 13 0 0 1 26 0C28 25 15 39 15 39Z" fill="#d9480f" stroke="#fff" stroke-width="2.5"/><circle cx="15" cy="14.5" r="5" fill="#fff"/></svg>' });
+
+function districtAt(lng, lat) {
+  if (!S.data.districts) return null;
+  const f = S.data.districts.features.find(f => geomHas(f.geometry, lng, lat));
+  return f ? f.properties.name : null;
+}
+function setLoc(ll, pan) {
+  F.latlng = ll;
+  const d = districtAt(ll.lng, ll.lat);
+  const box = $('#locBox');
+  if (!F.marker) {
+    F.marker = L.marker(ll, { draggable: true, icon: pinIcon, zIndexOffset: 1000 }).addTo(map);
+    F.marker.on('dragend', () => setLoc(F.marker.getLatLng(), false));
+  } else F.marker.setLatLng(ll);
+  if (pan) map.panTo(ll);
+  if (!d) {
+    box.className = 'locbox bad';
+    box.innerHTML = 'This spot is outside Colombo, Gampaha and Kalutara districts. Please move the pin inside the Western Province.';
+    F.district = null;
+  } else {
+    box.className = 'locbox set';
+    box.innerHTML = `<b>${esc(d)} District</b><br><span class="hint">${ll.lat.toFixed(5)}, ${ll.lng.toFixed(5)}. Drag the pin to adjust.</span>`;
+    F.district = d;
+  }
+}
+function pickMode(on) { document.body.classList.toggle('picking', on); }
+
+$$('#typeOpts input').forEach(r => r.addEventListener('change', () => {
+  const d = DETAIL[r.value];
+  $('#detailWrap').style.display = 'block';
+  $('#detailLabel').textContent = d.label;
+  $('#detail').innerHTML = '<option value="">Choose (optional)</option>' + d.opts.map(o => `<option>${esc(o)}</option>`).join('');
+}));
+$('#date').value = todayStr(); $('#date').max = todayStr();
+$('#desc').addEventListener('input', e => $('#descCnt').textContent = e.target.value.length);
+$('#pickBtn').onclick = () => { pickMode(true); $('#locBox').className = 'locbox'; $('#locBox').textContent = 'Now tap the map where it happened.'; if (innerWidth <= 820) $('#panel').classList.add('folded'), mapResize(); };
+$('#gpsBtn').onclick = () => {
+  if (!navigator.geolocation) return showErr('Your browser cannot share your location. Please tap the map instead.');
+  $('#locBox').textContent = 'Finding your location…';
+  navigator.geolocation.getCurrentPosition(
+    p => { setLoc(L.latLng(p.coords.latitude, p.coords.longitude), false); map.setView([p.coords.latitude, p.coords.longitude], Math.max(map.getZoom(), 14)); },
+    () => { $('#locBox').className = 'locbox bad'; $('#locBox').textContent = 'Could not get your location. Please tap the map instead.'; },
+    { enableHighAccuracy: true, timeout: 12000 });
+};
+function showErr(m) { $('#formErr').textContent = m || ''; }
+
+/* photo: resize + strip EXIF by re-encoding through canvas */
+$('#photo').addEventListener('change', async e => {
+  const f = e.target.files[0]; F.photo = null; $('#photoPrev').style.display = 'none'; showErr('');
+  if (!f) return;
+  if (!/^image\//.test(f.type)) { showErr('Please choose an image file.'); e.target.value = ''; return; }
+  if (f.size > 25e6) { showErr('That photo is too large. Please choose one under 25 MB.'); e.target.value = ''; return; }
+  try {
+    const bmp = await createImageBitmap(f, { imageOrientation: 'from-image' });
+    const k = Math.min(1, 1280 / Math.max(bmp.width, bmp.height));
+    const c = document.createElement('canvas'); c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+    c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+    const url = c.toDataURL('image/jpeg', .78);
+    F.photo = url.split(',')[1];
+    const pv = $('#photoPrev'); pv.src = url; pv.style.display = 'block';
+  } catch (err) { showErr('Could not read that photo. Try another one, or submit without it.'); e.target.value = ''; }
+});
+
+$('#reportForm').addEventListener('submit', async e => {
+  e.preventDefault(); if (F.busy) return; showErr('');
+  const type = ($('input[name=type]:checked') || {}).value, sev = ($('input[name=sev]:checked') || {}).value;
+  if ($('#website').value) return;                                   // honeypot
+  if (!F.latlng) return showErr('Step 1: please choose the location on the map.');
+  if (!F.district) return showErr('Step 1: the location must be inside Colombo, Gampaha or Kalutara.');
+  if (!type) return showErr('Step 2: please choose what happened.');
+  if (!sev) return showErr('Step 3: please choose how severe it is.');
+  if (!$('#date').value || $('#date').value > todayStr()) return showErr('Step 4: please choose a valid date (not in the future).');
+  if (!$('#consent').checked) return showErr('Please tick the box to confirm you understand how reports are used.');
+  let last = 0; try { last = +localStorage.getItem('wpdw_last') || 0; } catch (_) {}
+  if (Date.now() - last < 20000) return showErr('Please wait a few seconds before sending another report.');
+  F.busy = true; const btn = $('#submitBtn'); btn.disabled = true; btn.textContent = 'Sending…';
+  const body = {
+    incident_type: type, severity: sev, incident_date: $('#date').value, district: F.district,
+    detail: $('#detail').value, description: $('#desc').value.trim(),
+    lat: +F.latlng.lat.toFixed(6), lng: +F.latlng.lng.toFixed(6),
+    photo: F.photo ? { data: F.photo } : null
+  };
+  try {
+    // text/plain avoids a CORS pre-flight request, which Apps Script does not answer
+    const res = await fetch(CONFIG.SCRIPT_URL, { method: 'POST', body: JSON.stringify(body) });
+    const out = await res.json();
+    if (!out.ok) throw new Error(out.error || 'rejected');
+    try { localStorage.setItem('wpdw_last', String(Date.now())); } catch (_) {}
+    $('#reportForm').style.display = 'none';
+    const ok = $('#formOk'); ok.style.display = 'block';
+    ok.innerHTML = `<b>Thank you. Your report was received.</b><br>It will appear on the map after it has been reviewed. <br><br><button class="btn small line" id="againBtn" type="button">Send another report</button>`;
+    $('#againBtn').onclick = resetForm;
+  } catch (err) {
+    console.warn(err);
+    showErr('Sorry, the report could not be sent. Please check your connection and try again.');
+  }
+  F.busy = false; btn.disabled = false; btn.textContent = 'Submit report';
+});
+function resetForm() {
+  $('#reportForm').reset(); $('#reportForm').style.display = 'block'; $('#formOk').style.display = 'none';
+  $('#date').value = todayStr(); $('#detailWrap').style.display = 'none'; $('#photoPrev').style.display = 'none';
+  $('#descCnt').textContent = '0'; F.photo = null; F.latlng = null; F.district = null;
+  if (F.marker) { map.removeLayer(F.marker); F.marker = null; }
+  $('#locBox').className = 'locbox'; $('#locBox').textContent = 'No location chosen yet. Tap the map, or drag the pin to adjust it.';
+}
+
+/* =========================================================================
+   insights (official data)
+   ========================================================================= */
+function renderOfficial() {
+  const s = S.stats, n = s.notes;
+  const rows = Object.entries(s.districts);
+  $('#distTable').innerHTML = `<table class="t"><thead><tr><th>District</th><th>Flooded km&sup2;</th><th>Cells</th><th>Landslide pts</th><th>Hospitals*</th><th>Police</th></tr></thead><tbody>${rows.map(([d, v]) =>
+    `<tr><td>${d}</td><td>${fmt(v.flood_km2, 1)}</td><td>${fmt(v.flood_cells)}</td><td>${v.landslide_points}</td><td>${v.hospitals_major}${v.hospitals_major_in_flood ? ` (${v.hospitals_major_in_flood} flooded)` : ''}</td><td>${v.police}${v.police_in_flood ? ` (${v.police_in_flood} flooded)` : ''}</td></tr>`).join('')}
+    <tr><td><b>Total</b></td><td><b>${fmt(n.flood_total_km2, 1)}</b></td><td><b>${fmt(n.flood_total_cells)}</b></td><td><b>${rows.reduce((a, [, v]) => a + v.landslide_points, 0)}</b></td><td><b>${rows.reduce((a, [, v]) => a + v.hospitals_major, 0)}</b></td><td><b>${rows.reduce((a, [, v]) => a + v.police, 0)}</b></td></tr></tbody></table>`;
+  $('#distNote').innerHTML = `Cells are assigned to the district containing their centre. *Hospital-grade facilities. &ldquo;Flooded&rdquo; means within ${n.flood_buffer_m} m of a footprint cell. Source: course flood footprint and landslide layers, NSDI facilities.`;
+  $('#hotTable').innerHTML = `<table class="t"><thead><tr><th>#</th><th>Nearest police station</th><th>District</th><th>Count</th></tr></thead><tbody>${s.hotspots.map(h =>
+    `<tr class="click" data-ll="${h.lat},${h.lng}"><td>${h.rank}</td><td style="text-align:left">${esc(h.near.replace(/^Police Station\s*[-,]?\s*/i, ''))}</td><td>${h.district}</td><td>${fmt(h.count)}</td></tr>`).join('')}</tbody></table>`;
+  $$('#hotTable tr.click').forEach(tr => tr.onclick = () => { const [a, b] = tr.dataset.ll.split(',').map(Number); map.setView([a, b], 14); setLayer('flood', true); const cb = $('input[data-id=flood]'); if (cb) cb.checked = true; });
+  $('#lsTable').innerHTML = s.landslide_access.length ? `<table class="t"><thead><tr><th>Point</th><th>District</th><th>Hospital km</th><th>Police km</th></tr></thead><tbody>${s.landslide_access.map(l =>
+    `<tr class="click" data-ll="${l.lat},${l.lng}"><td>#${l.n}</td><td>${l.district}</td><td>${l.hospital_km}</td><td>${l.police_km}</td></tr>`).join('')}</tbody></table>` : '<span class="hint">No landslide points inside the province.</span>';
+  $$('#lsTable tr.click').forEach(tr => tr.onclick = () => { const [a, b] = tr.dataset.ll.split(',').map(Number); map.setView([a, b], 13); });
+}
+
+/* =========================================================================
+   live: weather + river discharge (Open-Meteo, no key)
+   ========================================================================= */
+function barChart(days, vals, probs, todayIdx, unit, thresholds) {
+  const W = 360, H = 130, pad = { l: 4, r: 4, t: 18, b: 22 };
+  const n = vals.length, bw = (W - pad.l - pad.r) / n;
+  const max = Math.max(40, ...vals.map(v => v || 0)) * 1.08;
+  const y = v => pad.t + (H - pad.t - pad.b) * (1 - v / max);
+  let s = `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Daily rainfall chart">`;
+  [50].forEach(t => { if (t < max) s += `<line x1="0" x2="${W}" y1="${y(t)}" y2="${y(t)}" stroke="#d98c2b" stroke-dasharray="4 3" stroke-width="1"/><text x="${W - 2}" y="${y(t) - 3}" text-anchor="end" font-size="9" fill="#a8680c">50 mm</text>`; });
+  vals.forEach((v, i) => {
+    const x = pad.l + i * bw + 3, w = bw - 6, past = i < todayIdx, h = (H - pad.t - pad.b) * ((v || 0) / max);
+    const col = past ? '#9db8d6' : (v >= 50 ? '#0b4a8f' : '#2f7fd0');
+    s += `<rect x="${x}" y="${y(v || 0)}" width="${w}" height="${Math.max(h, 1)}" rx="2" fill="${col}"/>`;
+    s += `<text x="${x + w / 2}" y="${y(v || 0) - 4}" text-anchor="middle" font-size="9.5" fill="#1b2a41">${v == null ? '' : Math.round(v)}</text>`;
+    const dt = new Date(days[i] + 'T00:00:00Z');
+    s += `<text x="${x + w / 2}" y="${H - 9}" text-anchor="middle" font-size="9.5" fill="${i === todayIdx ? '#d9480f' : '#586174'}" font-weight="${i === todayIdx ? 700 : 400}">${dt.toLocaleDateString('en-GB', { weekday: 'short', timeZone: 'UTC' }).slice(0, 2)}${dt.getUTCDate()}</text>`;
+  });
+  return s + '</svg>';
+}
+async function loadWeather(lat, lng, label) {
+  const card = $('#wxCard'); card.innerHTML = '<span class="hint">Loading weather&hellip;</span>';
+  try {
+    const q = new URLSearchParams({ latitude: lat.toFixed(3), longitude: lng.toFixed(3), timezone: CONFIG.TZ, past_days: 3, forecast_days: 7,
+      current: 'temperature_2m,relative_humidity_2m,precipitation,wind_speed_10m,wind_gusts_10m',
+      daily: 'precipitation_sum,precipitation_probability_max,wind_gusts_10m_max' });
+    const d = await getJSON('https://api.open-meteo.com/v1/forecast?' + q);
+    const c = d.current, u = d.current_units, D = d.daily;
+    const ti = D.time.indexOf(todayStr());
+    const todayIdx = ti >= 0 ? ti : 3;
+    const sum = (a, b) => D.precipitation_sum.slice(a, b).reduce((x, v) => x + (v || 0), 0);
+    const past3 = sum(Math.max(0, todayIdx - 3), todayIdx), next3 = sum(todayIdx, todayIdx + 3);
+    const gust = Math.max(...D.wind_gusts_10m_max.slice(todayIdx, todayIdx + 3).map(v => v || 0));
+    card.innerHTML = `
+      <div class="hint" style="margin-bottom:4px"><b>${esc(label)}</b> &middot; now</div>
+      <div class="big"><div class="tmp">${Math.round(c.temperature_2m)}${esc(u.temperature_2m)}</div>
+        <div class="hint">Rain now ${fmt(c.precipitation, 1)} ${esc(u.precipitation)}<br>Humidity ${Math.round(c.relative_humidity_2m)}${esc(u.relative_humidity_2m)}</div></div>
+      <div class="kv">
+        <div><b>${fmt(past3)} mm</b><span>Rain, last 3 days</span></div>
+        <div><b>${fmt(next3)} mm</b><span>Forecast, next 3 days</span></div>
+        <div><b>${Math.round(gust)} ${esc(u.wind_gusts_10m)}</b><span>Max gusts, next 3 days</span></div>
+      </div>
+      <div class="hint" style="margin:12px 0 2px"><b>Daily rainfall (mm)</b>: 3 days past, today and 6 days ahead</div>
+      ${barChart(D.time, D.precipitation_sum, D.precipitation_probability_max, todayIdx)}
+      <div class="src">Dashed line marks 50 mm per day, shown only as a visual guide. Saturated slopes can fail with less rain after several wet days. Source: Open-Meteo.com.</div>`;
+  } catch (e) { console.warn('weather', e); card.innerHTML = '<div class="notice">Weather data could not be loaded right now. Please try again later.</div>'; }
+}
+function renderPlaceSeg() {
+  $('#placeSeg').innerHTML = Object.keys(CONFIG.PLACES).map((n, i) => `<button type="button" data-p="${n}" aria-pressed="${i === 0}">${n}</button>`).join('');
+  $$('#placeSeg button').forEach(b => b.onclick = () => {
+    $$('#placeSeg button').forEach(x => x.setAttribute('aria-pressed', x === b));
+    const p = CONFIG.PLACES[b.dataset.p]; setWx(L.latLng(p.lat, p.lng), b.dataset.p + ' District (centre)');
+  });
+}
+function setWx(ll, label) {
+  S.wxPoint = ll;
+  if (!S.wxMarker) S.wxMarker = L.marker(ll, { icon: L.divIcon({ className: 'pin', iconSize: [18, 18], iconAnchor: [9, 9], html: '<svg width="18" height="18" viewBox="0 0 18 18"><circle cx="9" cy="9" r="6.5" fill="#fff" stroke="#14213d" stroke-width="3"/></svg>' }), interactive: false, zIndexOffset: 900 }).addTo(map);
+  else S.wxMarker.setLatLng(ll);
+  loadWeather(ll.lat, ll.lng, label || `${ll.lat.toFixed(3)}, ${ll.lng.toFixed(3)}`);
+}
+
+const TREND = [
+  { max: 1.25, c: '#2a9d8f', t: 'Normal / falling' },
+  { max: 2.0, c: '#e09f1f', t: 'Rising' },
+  { max: Infinity, c: '#c0392b', t: 'Sharp rise' }
+];
+function sparkline(days, vals, todayIdx, w = 96, h = 34, color = '#2a9d8f') {
+  const mx = Math.max(...vals), mn = Math.min(...vals), r = mx - mn || 1;
+  const X = i => 2 + i * (w - 4) / (vals.length - 1), Y = v => h - 3 - (v - mn) / r * (h - 8);
+  const seg = (a, b) => vals.slice(a, b).map((v, i) => `${i ? 'L' : 'M'}${X(a + i).toFixed(1)},${Y(v).toFixed(1)}`).join('');
+  return `<svg class="spark" viewBox="0 0 ${w} ${h}"><path d="${seg(0, todayIdx + 1)}" fill="none" stroke="${color}" stroke-width="2"/><path d="${seg(todayIdx, vals.length)}" fill="none" stroke="${color}" stroke-width="2" stroke-dasharray="3 3"/><line x1="${X(todayIdx)}" x2="${X(todayIdx)}" y1="0" y2="${h}" stroke="#aab4c3" stroke-width="1"/></svg>`;
+}
+function riverChart(days, vals, todayIdx, color) {
+  const W = 250, H = 120, p = { l: 34, r: 6, t: 8, b: 20 };
+  const mx = Math.max(...vals) * 1.1, X = i => p.l + i * (W - p.l - p.r) / (vals.length - 1), Y = v => p.t + (H - p.t - p.b) * (1 - v / mx);
+  const seg = (a, b) => vals.slice(a, b).map((v, i) => `${i ? 'L' : 'M'}${X(a + i).toFixed(1)},${Y(v).toFixed(1)}`).join('');
+  const ticks = [0, .5, 1].map(f => mx * f);
+  let s = `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="River discharge chart">`;
+  ticks.forEach(t => s += `<line x1="${p.l}" x2="${W - p.r}" y1="${Y(t)}" y2="${Y(t)}" stroke="#e6ebf2"/><text x="${p.l - 4}" y="${Y(t) + 3}" text-anchor="end" font-size="9" fill="#586174">${Math.round(t)}</text>`);
+  s += `<path d="${seg(0, todayIdx + 1)}" fill="none" stroke="${color}" stroke-width="2.2"/><path d="${seg(todayIdx, vals.length)}" fill="none" stroke="${color}" stroke-width="2.2" stroke-dasharray="4 3"/>`;
+  s += `<line x1="${X(todayIdx)}" x2="${X(todayIdx)}" y1="${p.t}" y2="${H - p.b}" stroke="#d9480f" stroke-width="1"/><text x="${X(todayIdx)}" y="${H - 6}" text-anchor="middle" font-size="9" fill="#d9480f">today</text>`;
+  s += `<text x="${p.l}" y="${H - 6}" font-size="9" fill="#586174">${days[0].slice(5)}</text><text x="${W - p.r}" y="${H - 6}" text-anchor="end" font-size="9" fill="#586174">${days[days.length - 1].slice(5)}</text>`;
+  return s + '</svg>';
+}
+async function loadRivers() {
+  const out = await Promise.allSettled(CONFIG.RIVERS.map(async r => {
+    const q = new URLSearchParams({ latitude: r.lat, longitude: r.lng, daily: 'river_discharge', past_days: 14, forecast_days: 10 });
+    const d = await getJSON('https://flood-api.open-meteo.com/v1/flood?' + q);
+    const days = d.daily.time, vals = d.daily.river_discharge.map(v => v == null ? 0 : v);
+    let ti = days.indexOf(todayStr()); if (ti < 0) ti = Math.min(14, days.length - 1);
+    const base = vals.slice(0, ti).reduce((a, b) => a + b, 0) / Math.max(1, ti);
+    const peak = Math.max(...vals.slice(ti, ti + 8));
+    const ratio = base > 0 ? peak / base : 1;
+    const tr = TREND.find(t => ratio < t.max);
+    return { ...r, cell: [d.latitude, d.longitude], days, vals, ti, now: vals[ti], peak, base, ratio, tr };
+  }));
+  S.rivers = out.filter(o => o.status === 'fulfilled').map(o => o.value);
+  S.riverLayer.clearLayers();
+  S.rivers.forEach(r => {
+    const m = L.marker(r.cell, { pane: 'pts', icon: L.divIcon({ className: 'rep', iconSize: [22, 22], iconAnchor: [11, 11], html: `<svg width="22" height="22" viewBox="0 0 22 22"><rect x="3.5" y="3.5" width="15" height="15" rx="4" fill="${r.tr.c}" stroke="#fff" stroke-width="2.5"/><path d="M6.5 9.5q1.2-1.2 2.5 0t2.5 0 2.5 0M6.5 13q1.2-1.2 2.5 0t2.5 0 2.5 0" fill="none" stroke="#fff" stroke-width="1.4" stroke-linecap="round"/></svg>` }) });
+    m.bindPopup(() => riverPopup(r), { maxWidth: 290 }).addTo(S.riverLayer);
+    r.marker = m;
+  });
+  if (state.rivers !== false && !map.hasLayer(S.riverLayer)) S.riverLayer.addTo(map);
+  renderRivers(out.filter(o => o.status === 'rejected').length);
+}
+function riverPopup(r) {
+  return `<div class="pop"><h4>${esc(r.name)}</h4><div class="meta">Modelled river discharge (GloFAS via Open-Meteo)</div>
+    <span class="chip" style="--c:${r.tr.c}">${r.tr.t}</span>
+    <dl style="margin-top:8px"><dt>Today</dt><dd>${fmt(r.now, 1)} m&sup3;/s</dd><dt>Peak, next 7 days</dt><dd>${fmt(r.peak, 1)} m&sup3;/s</dd><dt>Average, past 14 days</dt><dd>${fmt(r.base, 1)} m&sup3;/s</dd></dl>
+    ${riverChart(r.days, r.vals, r.ti, r.tr.c)}
+    <div class="flag">Model estimate for the 5 km grid cell at ${r.cell[0].toFixed(2)}, ${r.cell[1].toFixed(2)}. It is not a gauge reading or an official warning.</div></div>`;
+}
+function renderRivers(failed) {
+  const L2 = $('#riverList');
+  if (!S.rivers.length) { L2.innerHTML = '<div class="notice">River data could not be loaded right now. Please try again later.</div>'; return; }
+  L2.innerHTML = S.rivers.map((r, i) => `<div class="river" data-i="${i}" tabindex="0" role="button" aria-label="Show ${esc(r.name)} on the map">
+      <div class="nm"><b>${esc(r.name)}</b><span class="hint">${fmt(r.now, 0)} m&sup3;/s today &middot; peak ${fmt(r.peak, 0)} next 7 days</span><br><span class="chip" style="--c:${r.tr.c}">${r.tr.t}</span></div>
+      ${sparkline(r.days, r.vals, r.ti, 96, 34, r.tr.c)}</div>`).join('');
+  $$('.river', L2).forEach(el => { const go = () => { const r = S.rivers[+el.dataset.i]; map.setView(r.cell, 12); r.marker.openPopup(); }; el.onclick = go; el.onkeydown = e => { if (e.key === 'Enter') go(); }; });
+  $('#riverNote').innerHTML = `Trend compares the highest forecast flow in the next 7 days with the average of the past 14 days: below 1.25&times; normal/falling, up to 2&times; rising, above that a sharp rise. Indicative only. ${failed ? failed + ' point(s) could not be loaded. ' : ''}Source: <a href="https://open-meteo.com/en/docs/flood-api" target="_blank" rel="noopener">Open-Meteo Flood API</a> (GloFAS, about 5 km grid).`;
+}
+
+/* =========================================================================
+   UI wiring
+   ========================================================================= */
+function mapResize() { setTimeout(() => map.invalidateSize(), 60); }
+function setTab(t) {
+  S.tab = t;
+  $$('#tabs [data-tab]').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === t));
+  $$('.tabpane').forEach(p => p.classList.toggle('on', p.id === 'pane-' + t));
+  $('#panel').classList.remove('folded'); setFoldIcon();
+  pickMode(t === 'report' && !F.latlng);
+  map.closePopup(); mapResize();
+  if (t === 'live' && !S.wxPoint) { const p = CONFIG.PLACES.Colombo; setWx(L.latLng(p.lat, p.lng), 'Colombo District (centre)'); }
+}
+function setFoldIcon() { $('#foldIcon').setAttribute('d', $('#panel').classList.contains('folded') ? 'm6 9 6 6 6-6' : 'm6 15 6-6 6 6'); }
+$$('#tabs [data-tab]').forEach(b => b.addEventListener('click', () => setTab(b.dataset.tab)));
+$('#reportBtn').onclick = () => setTab('report');
+$('#foldBtn').onclick = () => { $('#panel').classList.toggle('folded'); setFoldIcon(); mapResize(); };
+$('#aboutBtn').onclick = () => $('#aboutDlg').showModal();
+$('#aboutClose').onclick = () => $('#aboutDlg').close();
+$('#refreshBtn').onclick = loadReports;
+map.on('click', e => {
+  if (S.tab === 'report') { pickMode(false); setLoc(e.latlng, false); if (innerWidth <= 820) { $('#panel').classList.remove('folded'); setFoldIcon(); mapResize(); } }
+  else if (S.tab === 'live') { $$('#placeSeg button').forEach(x => x.setAttribute('aria-pressed', 'false')); setWx(e.latlng, `Map point ${e.latlng.lat.toFixed(3)}, ${e.latlng.lng.toFixed(3)}`); }
+});
+
+/* legend + badge controls */
+const Legend = L.control({ position: 'bottomright' });
+Legend.onAdd = () => {
+  const d = L.DomUtil.create('div', 'legend');
+  d.innerHTML = `<button class="tog" type="button" aria-label="Collapse legend">&minus;</button><b>Legend</b><div class="body">
+    <div class="r">${circ('#1f6fd1')} Flood report</div><div class="r">${tri('#b4571f')} Landslide report</div><div class="r">${dia('#7a4bc2')} Storm damage report</div>
+    <div class="hint" style="line-height:1.3;margin:2px 0 4px">Bigger symbol = more severe</div>
+    <div class="r">${box('rgba(23,162,184,.6)', '#0e7c8f')} Ditwah flooded area</div><div class="r">${tri('#b4571f', 16, true)} Ditwah landslide point</div>
+    <div class="r"><svg viewBox="0 0 16 16"><rect x="2" y="2" width="12" height="12" rx="3" fill="#2a9d8f" stroke="#fff" stroke-width="1.5"/></svg> River flow trend (colour)</div></div>`;
+  L.DomEvent.disableClickPropagation(d);
+  $('.tog', d).onclick = e => { d.classList.toggle('min'); e.target.innerHTML = d.classList.contains('min') ? '+' : '&minus;'; };
+  return d;
+};
+Legend.addTo(map);
+badge = L.control({ position: 'topleft' });
+badge.onAdd = () => { const d = L.DomUtil.create('div', ''); d.innerHTML = '<div class="mapbadge"><span>Loading reports&hellip;</span></div>'; L.DomEvent.disableClickPropagation(d); return d; };
+badge.addTo(map);
+
+/* =========================================================================
+   boot
+   ========================================================================= */
+(async function boot() {
+  renderLayerList(); renderPlaceSeg();
+  const files = ['province', 'districts', 'flood', 'landslides', 'soil', 'wetlands', 'water', 'hospitals', 'police'];
+  try {
+    const res = await Promise.all(files.map(f => getJSON(`data/${f}.json`)));
+    files.forEach((f, i) => S.data[f] = res[i]);
+    S.stats = await getJSON('data/stats.json');
+  } catch (e) { console.error(e); $('#layerList').insertAdjacentHTML('afterbegin', '<div class="notice bad">Map data could not be loaded. Please reload the page.</div>'); return; }
+
+  const prov = L.geoJSON(S.data.province, { pane: 'outline', interactive: false, style: { color: '#10243e', weight: 3, fill: false } }).addTo(map);
+  map.invalidateSize();
+  map.fitBounds(prov.getBounds(), { padding: [10, 10], animate: false });
+  map.setMaxBounds(prov.getBounds().pad(0.6));
+  window.addEventListener('resize', () => map.invalidateSize());
+  LAYERS.forEach(g => g.items.forEach(it => { if (it.id.startsWith('rep-') || it.id === 'heat' || it.id === 'rivers') { state[it.id] = it.on; return; } if (it.on) setLayer(it.id, true); }));
+  state.rivers = true; S.riverLayer.addTo(map);
+  renderOfficial();
+  loadReports();
+  loadRivers();
+  mapResize();
+})();
+</script>
+</body>
+</html>
